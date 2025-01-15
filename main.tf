@@ -96,7 +96,6 @@ resource "azurerm_mssql_virtual_network_rule" "vnet_rules" {
 }
 
 resource "azurerm_mssql_server_extended_auditing_policy" "extended_auditing_policies" {
-  # Only create if the extended_auditing_policy block exists AND 'enabled = true'
   for_each = {
     for server in var.mssql_servers :
     server.name => server.extended_auditing_policy
@@ -105,10 +104,8 @@ resource "azurerm_mssql_server_extended_auditing_policy" "extended_auditing_poli
 
   server_id = azurerm_mssql_server.this[each.key].id
 
-  # The resource requires storage_endpoint
   storage_endpoint = try(each.value.storage_endpoint, null)
 
-  # Optional fields with try() to handle null
   retention_in_days                       = try(each.value.retention_in_days, 0)
   storage_account_access_key              = try(each.value.storage_account_access_key, null)
   storage_account_access_key_is_secondary = try(each.value.storage_account_access_key_is_secondary, false)
@@ -116,6 +113,50 @@ resource "azurerm_mssql_server_extended_auditing_policy" "extended_auditing_poli
   predicate_expression                    = try(each.value.predicate_expression, null)
   storage_account_subscription_id         = try(each.value.storage_account_subscription_id, null)
 
-  # Provide a sensible default if not set
   audit_actions_and_groups = try(each.value.audit_actions_and_groups, ["BATCH_COMPLETED_GROUP"])
+}
+
+
+resource "azurerm_mssql_server_security_alert_policy" "security_alert_policies" {
+  for_each = {
+    for s in var.mssql_servers :
+    s.name => s
+    if s.security_alert_policy != null
+    && try(s.security_alert_policy.state, "Enabled") != "Disabled"
+  }
+
+  resource_group_name        = azurerm_mssql_server.this[each.key].resource_group_name
+  server_name                = azurerm_mssql_server.this[each.key].name
+  state                      = try(each.value.security_alert_policy.state, "Enabled")
+  storage_endpoint           = try(each.value.security_alert_policy.storage_endpoint, azurerm_storage_account.example.primary_blob_endpoint)
+  storage_account_access_key = try(each.value.security_alert_policy.storage_account_access_key, azurerm_storage_account.example.primary_access_key)
+  retention_days             = try(each.value.security_alert_policy.retention_days, 0)
+  disabled_alerts            = try(each.value.security_alert_policy.disabled_alerts, [])
+  email_account_admins       = try(each.value.security_alert_policy.email_account_admins, "Disabled")
+  email_addresses            = try(each.value.security_alert_policy.email_addresses, [])
+}
+
+resource "azurerm_mssql_server_vulnerability_assessment" "vulnerability_assessment" {
+  for_each = {
+    for s in var.mssql_servers :
+    s.name => s
+    if s.vulnerability_assessment != null
+    && try(s.vulnerability_assessment.enabled, false) == true
+    && contains(keys(azurerm_mssql_server_security_alert_policy.security_alert_policies), s.name)
+  }
+
+  server_security_alert_policy_id = azurerm_mssql_server_security_alert_policy.security_alert_policies[each.key].id
+  storage_container_path          = each.value.vulnerability_assessment.storage_container_path
+  storage_container_access_key    = each.value.vulnerability_assessment.storage_container_access_key
+  storage_container_sas_key       = each.value.vulnerability_assessment.storage_container_sas_key
+
+
+  dynamic "recurring_scans" {
+    for_each = each.value.vulnerability_assessment.recurring_scans != null ? [each.value.vulnerability_assessment.recurring_scans] : []
+    content {
+      enabled                   = recurring_scans.value.enabled
+      email_subscription_admins = recurring_scans.value.email_subscription_admins
+      emails                    = recurring_scans.value.emails
+    }
+  }
 }

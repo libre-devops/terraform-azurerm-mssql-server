@@ -97,7 +97,6 @@ resource "azurerm_mssql_virtual_network_rule" "vnet_rules" {
 }
 
 resource "azurerm_mssql_server_extended_auditing_policy" "extended_auditing_policies" {
-  # Only create if the extended_auditing_policy block exists AND 'enabled = true'
   for_each = {
     for server in var.mssql_servers :
     server.name => server.extended_auditing_policy
@@ -106,10 +105,8 @@ resource "azurerm_mssql_server_extended_auditing_policy" "extended_auditing_poli
 
   server_id = azurerm_mssql_server.this[each.key].id
 
-  # The resource requires storage_endpoint
   storage_endpoint = try(each.value.storage_endpoint, null)
 
-  # Optional fields with try() to handle null
   retention_in_days                       = try(each.value.retention_in_days, 0)
   storage_account_access_key              = try(each.value.storage_account_access_key, null)
   storage_account_access_key_is_secondary = try(each.value.storage_account_access_key_is_secondary, false)
@@ -117,8 +114,52 @@ resource "azurerm_mssql_server_extended_auditing_policy" "extended_auditing_poli
   predicate_expression                    = try(each.value.predicate_expression, null)
   storage_account_subscription_id         = try(each.value.storage_account_subscription_id, null)
 
-  # Provide a sensible default if not set
   audit_actions_and_groups = try(each.value.audit_actions_and_groups, ["BATCH_COMPLETED_GROUP"])
+}
+
+
+resource "azurerm_mssql_server_security_alert_policy" "security_alert_policies" {
+  for_each = {
+    for s in var.mssql_servers :
+    s.name => s
+    if s.security_alert_policy != null
+    && try(s.security_alert_policy.state, "Enabled") != "Disabled"
+  }
+
+  resource_group_name        = azurerm_mssql_server.this[each.key].resource_group_name
+  server_name                = azurerm_mssql_server.this[each.key].name
+  state                      = try(each.value.security_alert_policy.state, "Enabled")
+  storage_endpoint           = try(each.value.security_alert_policy.storage_endpoint, azurerm_storage_account.example.primary_blob_endpoint)
+  storage_account_access_key = try(each.value.security_alert_policy.storage_account_access_key, azurerm_storage_account.example.primary_access_key)
+  retention_days             = try(each.value.security_alert_policy.retention_days, 0)
+  disabled_alerts            = try(each.value.security_alert_policy.disabled_alerts, [])
+  email_account_admins       = try(each.value.security_alert_policy.email_account_admins, "Disabled")
+  email_addresses            = try(each.value.security_alert_policy.email_addresses, [])
+}
+
+resource "azurerm_mssql_server_vulnerability_assessment" "vulnerability_assessment" {
+  for_each = {
+    for s in var.mssql_servers :
+    s.name => s
+    if s.vulnerability_assessment != null
+    && try(s.vulnerability_assessment.enabled, false) == true
+    && contains(keys(azurerm_mssql_server_security_alert_policy.security_alert_policies), s.name)
+  }
+
+  server_security_alert_policy_id = azurerm_mssql_server_security_alert_policy.security_alert_policies[each.key].id
+  storage_container_path          = each.value.vulnerability_assessment.storage_container_path
+  storage_container_access_key    = each.value.vulnerability_assessment.storage_container_access_key
+  storage_container_sas_key       = each.value.vulnerability_assessment.storage_container_sas_key
+
+
+  dynamic "recurring_scans" {
+    for_each = each.value.vulnerability_assessment.recurring_scans != null ? [each.value.vulnerability_assessment.recurring_scans] : []
+    content {
+      enabled                   = recurring_scans.value.enabled
+      email_subscription_admins = recurring_scans.value.email_subscription_admins
+      emails                    = recurring_scans.value.emails
+    }
+  }
 }
 ```
 ## Requirements
@@ -142,13 +183,15 @@ No modules.
 | [azurerm_mssql_firewall_rule.firewall_rules](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/mssql_firewall_rule) | resource |
 | [azurerm_mssql_server.this](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/mssql_server) | resource |
 | [azurerm_mssql_server_extended_auditing_policy.extended_auditing_policies](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/mssql_server_extended_auditing_policy) | resource |
+| [azurerm_mssql_server_security_alert_policy.security_alert_policies](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/mssql_server_security_alert_policy) | resource |
+| [azurerm_mssql_server_vulnerability_assessment.vulnerability_assessment](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/mssql_server_vulnerability_assessment) | resource |
 | [azurerm_mssql_virtual_network_rule.vnet_rules](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/mssql_virtual_network_rule) | resource |
 
 ## Inputs
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
-| <a name="input_mssql_servers"></a> [mssql\_servers](#input\_mssql\_servers) | List to deploy mssql servers | <pre>list(object({<br/>    rg_name                                      = string<br/>    location                                     = optional(string, "uksouth")<br/>    tags                                         = map(string)<br/>    name                                         = string<br/>    version                                      = optional(string, "12.0")<br/>    administrator_login                          = optional(string)<br/>    administrator_login_password                 = optional(string)<br/>    identity_type                                = optional(string)<br/>    identity_ids                                 = optional(list(string))<br/>    connection_policy                            = optional(string, "Default")<br/>    transparent_data_encryption_key_vault_key_id = optional(string)<br/>    minimum_tls_version                          = optional(string, "1.2")<br/>    public_network_access_enabled                = optional(bool, false)<br/>    outbound_network_restriction_enabled         = optional(bool, false)<br/>    primary_user_assigned_identity_id            = optional(string)<br/><br/>    azuread_administrator = optional(object({<br/>      login_username              = string<br/>      object_id                   = string<br/>      tenant_id                   = optional(string)<br/>      azuread_authentication_only = optional(bool)<br/>    }))<br/><br/>    firewall_rules = optional(list(object({<br/>      name             = string<br/>      start_ip_address = string<br/>      end_ip_address   = string<br/>    })))<br/>    vnet_rules = optional(list(object({<br/>      name                                 = string<br/>      subnet_id                            = string<br/>      ignore_missing_vnet_service_endpoint = optional(bool, false)<br/>    })))<br/>    extended_auditing_policy = optional(object({<br/>      enabled                                 = optional(bool, false)<br/>      storage_endpoint                        = optional(string)<br/>      retention_in_days                       = optional(number)<br/>      storage_account_access_key              = optional(string)<br/>      storage_account_access_key_is_secondary = optional(bool)<br/>      log_monitoring_enabled                  = optional(bool)<br/>      storage_account_subscription_id         = optional(string)<br/>      predicate_expression                    = optional(string)<br/>      audit_actions_and_groups                = optional(list(string), ["BATCH_COMPLETED_GROUP"])<br/><br/>    }))<br/>  }))</pre> | n/a | yes |
+| <a name="input_mssql_servers"></a> [mssql\_servers](#input\_mssql\_servers) | List to deploy mssql servers | <pre>list(object({<br/>    rg_name                                      = string<br/>    location                                     = optional(string, "uksouth")<br/>    tags                                         = map(string)<br/>    name                                         = string<br/>    version                                      = optional(string, "12.0")<br/>    administrator_login                          = optional(string)<br/>    administrator_login_password                 = optional(string)<br/>    identity_type                                = optional(string)<br/>    identity_ids                                 = optional(list(string))<br/>    connection_policy                            = optional(string, "Default")<br/>    transparent_data_encryption_key_vault_key_id = optional(string)<br/>    minimum_tls_version                          = optional(string, "1.2")<br/>    public_network_access_enabled                = optional(bool, false)<br/>    outbound_network_restriction_enabled         = optional(bool, false)<br/>    primary_user_assigned_identity_id            = optional(string)<br/>    azuread_administrator = optional(object({<br/>      login_username              = string<br/>      object_id                   = string<br/>      tenant_id                   = optional(string)<br/>      azuread_authentication_only = optional(bool)<br/>    }))<br/>    security_alert_policy = optional(object({<br/>      state                      = optional(string, "Enabled")<br/>      disabled_alerts            = optional(list(string), [])<br/>      email_account_admins       = optional(string, "Disabled")<br/>      email_addresses            = optional(list(string), [])<br/>      retention_days             = optional(number, 0)<br/>      storage_account_access_key = optional(string)<br/>      storage_endpoint           = optional(string)<br/>    }))<br/>    vulnerability_assessment = optional(object({<br/>      storage_container_path     = optional(string)<br/>      storage_account_access_key = optional(string)<br/>      storage_container_sas_key  = optional(string)<br/>      recurring_scans = optional(object({<br/>        enabled                   = optional(bool, true)<br/>        email_subscription_admins = optional(bool, false)<br/>        emails                    = optional(list(string))<br/>      }))<br/>    }))<br/>    firewall_rules = optional(list(object({<br/>      name             = string<br/>      start_ip_address = string<br/>      end_ip_address   = string<br/>    })))<br/>    vnet_rules = optional(list(object({<br/>      name                                 = string<br/>      subnet_id                            = string<br/>      ignore_missing_vnet_service_endpoint = optional(bool, false)<br/>    })))<br/>    extended_auditing_policy = optional(object({<br/>      enabled                                 = optional(bool, true)<br/>      storage_endpoint                        = optional(string)<br/>      retention_in_days                       = optional(number, 0)<br/>      storage_account_access_key              = optional(string)<br/>      storage_account_access_key_is_secondary = optional(bool)<br/>      log_monitoring_enabled                  = optional(bool, true)<br/>      storage_account_subscription_id         = optional(string)<br/>      predicate_expression                    = optional(string)<br/>      audit_actions_and_groups                = optional(list(string), ["BATCH_COMPLETED_GROUP"])<br/>    }))<br/>  }))</pre> | n/a | yes |
 
 ## Outputs
 

@@ -16,14 +16,31 @@ variable "mssql_servers" {
     public_network_access_enabled                = optional(bool, false)
     outbound_network_restriction_enabled         = optional(bool, false)
     primary_user_assigned_identity_id            = optional(string)
-
     azuread_administrator = optional(object({
       login_username              = string
       object_id                   = string
       tenant_id                   = optional(string)
       azuread_authentication_only = optional(bool)
     }))
-
+    security_alert_policy = optional(object({
+      state                      = optional(string, "Enabled")
+      disabled_alerts            = optional(list(string), [])
+      email_account_admins       = optional(string, "Disabled")
+      email_addresses            = optional(list(string), [])
+      retention_days             = optional(number, 0)
+      storage_account_access_key = optional(string)
+      storage_endpoint           = optional(string)
+    }))
+    vulnerability_assessment = optional(object({
+      storage_container_path     = optional(string)
+      storage_account_access_key = optional(string)
+      storage_container_sas_key  = optional(string)
+      recurring_scans = optional(object({
+        enabled                   = optional(bool, true)
+        email_subscription_admins = optional(bool, false)
+        emails                    = optional(list(string))
+      }))
+    }))
     firewall_rules = optional(list(object({
       name             = string
       start_ip_address = string
@@ -35,16 +52,15 @@ variable "mssql_servers" {
       ignore_missing_vnet_service_endpoint = optional(bool, false)
     })))
     extended_auditing_policy = optional(object({
-      enabled                                 = optional(bool, false)
+      enabled                                 = optional(bool, true)
       storage_endpoint                        = optional(string)
-      retention_in_days                       = optional(number)
+      retention_in_days                       = optional(number, 0)
       storage_account_access_key              = optional(string)
       storage_account_access_key_is_secondary = optional(bool)
-      log_monitoring_enabled                  = optional(bool)
+      log_monitoring_enabled                  = optional(bool, true)
       storage_account_subscription_id         = optional(string)
       predicate_expression                    = optional(string)
       audit_actions_and_groups                = optional(list(string), ["BATCH_COMPLETED_GROUP"])
-
     }))
   }))
 }
