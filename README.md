@@ -51,6 +51,7 @@ resource "azurerm_mssql_server" "this" {
     }
   }
 }
+
 ```
 ## Requirements
 
@@ -80,4 +81,10 @@ No modules.
 
 ## Outputs
 
-No outputs.
+| Name | Description |
+|------|-------------|
+| <a name="output_mssql_restorable_dropped_database_ids"></a> [mssql\_restorable\_dropped\_database\_ids](#output\_mssql\_restorable\_dropped\_database\_ids) | The ID of the restorable dropped database. |
+| <a name="output_mssql_server_fully_qualified_domain_name"></a> [mssql\_server\_fully\_qualified\_domain\_name](#output\_mssql\_server\_fully\_qualified\_domain\_name) | The fully qualified domain name of the mssql server. |
+| <a name="output_mssql_server_id"></a> [mssql\_server\_id](#output\_mssql\_server\_id) | The ID of the mssql server. |
+| <a name="output_mssql_server_identity"></a> [mssql\_server\_identity](#output\_mssql\_server\_identity) | The identity of the mssql server. |
+| <a name="output_mssql_server_name"></a> [mssql\_server\_name](#output\_mssql\_server\_name) | The name of the mssql server. |
