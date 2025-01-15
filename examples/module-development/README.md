@@ -15,6 +15,47 @@ module "rg" {
   #  lock_level = "CanNotDelete" // Do not set this value to skip lock
 }
 
+module "shared_vars" {
+  source = "libre-devops/shared-vars/azurerm"
+}
+
+locals {
+  lookup_cidr = {
+    for landing_zone, envs in module.shared_vars.cidrs : landing_zone => {
+      for env, cidr in envs : env => cidr
+    }
+  }
+}
+
+module "subnet_calculator" {
+  source = "libre-devops/subnet-calculator/null"
+
+  base_cidr    = local.lookup_cidr[var.short][var.env][0]
+  subnet_sizes = [26]
+}
+
+module "network" {
+  source = "libre-devops/network/azurerm"
+
+  rg_name  = module.rg.rg_name
+  location = module.rg.rg_location
+  tags     = module.rg.rg_tags
+
+  vnet_name          = "vnet-${var.short}-${var.loc}-${var.env}-01"
+  vnet_location      = module.rg.rg_location
+  vnet_address_space = [module.subnet_calculator.base_cidr]
+
+  subnets = {
+    for i, name in module.subnet_calculator.subnet_names :
+    name => {
+      address_prefixes  = toset([module.subnet_calculator.subnet_ranges[i]])
+      service_endpoints = ["Microsoft.Sql"]
+
+      delegation = []
+    }
+  }
+}
+
 module "mssql_servers" {
   source = "../../"
 
@@ -49,6 +90,13 @@ module "mssql_servers" {
           end_ip_address   = chomp(data.http.client_ip.response_body)
         }
       ]
+
+      vnet_rules = [
+        {
+          name      = "AllowSubnet1"
+          subnet_id = module.network.subnets_ids["subnet1"]
+        }
+      ]
     }
   ]
 }
@@ -70,7 +118,10 @@ No requirements.
 | Name | Source | Version |
 |------|--------|---------|
 | <a name="module_mssql_servers"></a> [mssql\_servers](#module\_mssql\_servers) | ../../ | n/a |
+| <a name="module_network"></a> [network](#module\_network) | libre-devops/network/azurerm | n/a |
 | <a name="module_rg"></a> [rg](#module\_rg) | registry.terraform.io/libre-devops/rg/azurerm | n/a |
+| <a name="module_shared_vars"></a> [shared\_vars](#module\_shared\_vars) | libre-devops/shared-vars/azurerm | n/a |
+| <a name="module_subnet_calculator"></a> [subnet\_calculator](#module\_subnet\_calculator) | libre-devops/subnet-calculator/null | n/a |
 
 ## Resources
 

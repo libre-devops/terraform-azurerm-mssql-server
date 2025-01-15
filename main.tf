@@ -52,12 +52,20 @@ resource "azurerm_mssql_server" "this" {
 }
 
 locals {
-  # Produce a list of { server_name, rule } objects
   combined_firewall_rules = flatten([
     for s in var.mssql_servers : [
       for fw in(s.firewall_rules != null ? s.firewall_rules : []) : {
         server_name = s.name
         rule        = fw
+      }
+    ]
+  ])
+
+  combined_vnet_rules = flatten([
+    for s in var.mssql_servers : [
+      for vnr in (s.vnet_rules != null ? s.vnet_rules : []) : {
+        server_name = s.name
+        vnet_rule   = vnr
       }
     ]
   ])
@@ -74,4 +82,40 @@ resource "azurerm_mssql_firewall_rule" "firewall_rules" {
   server_id        = azurerm_mssql_server.this[each.value.server_name].id
   start_ip_address = each.value.rule.start_ip_address
   end_ip_address   = each.value.rule.end_ip_address
+}
+
+resource "azurerm_mssql_virtual_network_rule" "vnet_rules" {
+  for_each = {
+    for vr in local.combined_vnet_rules :
+    "${vr.server_name}-${vr.vnet_rule.name}" => vr
+  }
+
+  name      = each.value.vnet_rule.name
+  server_id = azurerm_mssql_server.this[each.value.server_name].id
+  subnet_id = each.value.vnet_rule.subnet_id
+}
+
+resource "azurerm_mssql_server_extended_auditing_policy" "extended_auditing_policies" {
+  # Only create if the extended_auditing_policy block exists AND 'enabled = true'
+  for_each = {
+    for server in var.mssql_servers :
+    server.name => server.extended_auditing_policy
+    if server.extended_auditing_policy != null
+  }
+
+  server_id = azurerm_mssql_server.this[each.key].id
+
+  # The resource requires storage_endpoint
+  storage_endpoint = try(each.value.storage_endpoint, null)
+
+  # Optional fields with try() to handle null
+  retention_in_days                     = try(each.value.retention_in_days, 0)
+  storage_account_access_key            = try(each.value.storage_account_access_key, null)
+  storage_account_access_key_is_secondary = try(each.value.storage_account_access_key_is_secondary, false)
+  log_monitoring_enabled                = try(each.value.log_monitoring_enabled, false)
+  predicate_expression                  = try(each.value.predicate_expression, null)
+  storage_account_subscription_id       = try(each.value.storage_account_subscription_id, null)
+
+  # Provide a sensible default if not set
+  audit_actions_and_groups = try(each.value.audit_actions_and_groups, ["BATCH_COMPLETED_GROUP"])
 }

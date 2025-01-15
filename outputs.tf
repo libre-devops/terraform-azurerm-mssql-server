@@ -22,3 +22,19 @@ output "mssql_server_name" {
   description = "The name of the mssql server."
   value       = { for server in azurerm_mssql_server.this : server.name => server.name }
 }
+
+output "mssql_firewall_rule_ids" {
+  description = "A map of MSSQL Firewall Rule IDs, keyed by <server>-<rule>."
+  value = {
+    for rule_key, rule_res in azurerm_mssql_firewall_rule.firewall_rules :
+    rule_key => rule_res.id
+  }
+}
+
+output "mssql_vnet_rule_ids" {
+  description = "A map of MSSQL VNet Rule IDs, keyed by <server>-<rule>."
+  value = {
+    for rule_key, rule_res in azurerm_mssql_virtual_network_rule.vnet_rules :
+    rule_key => rule_res.id
+  }
+}
