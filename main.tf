@@ -50,3 +50,28 @@ resource "azurerm_mssql_server" "this" {
     }
   }
 }
+
+locals {
+  # Produce a list of { server_name, rule } objects
+  combined_firewall_rules = flatten([
+    for s in var.mssql_servers : [
+      for fw in(s.firewall_rules != null ? s.firewall_rules : []) : {
+        server_name = s.name
+        rule        = fw
+      }
+    ]
+  ])
+}
+
+resource "azurerm_mssql_firewall_rule" "firewall_rules" {
+  # Each item in local.combined_firewall_rules becomes a resource
+  for_each = {
+    for fr in local.combined_firewall_rules :
+    "${fr.server_name}-${fr.rule.name}" => fr
+  }
+
+  name             = each.value.rule.name
+  server_id        = azurerm_mssql_server.this[each.value.server_name].id
+  start_ip_address = each.value.rule.start_ip_address
+  end_ip_address   = each.value.rule.end_ip_address
+}

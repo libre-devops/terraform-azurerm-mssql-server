@@ -23,5 +23,11 @@ variable "mssql_servers" {
       tenant_id                   = optional(string)
       azuread_authentication_only = optional(bool)
     }))
+
+    firewall_rules = optional(list(object({
+      name             = string
+      start_ip_address = string
+      end_ip_address   = string
+    })))
   }))
 }

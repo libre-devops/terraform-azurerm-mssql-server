@@ -51,6 +51,31 @@ resource "azurerm_mssql_server" "this" {
     }
   }
 }
+
+locals {
+  # Produce a list of { server_name, rule } objects
+  combined_firewall_rules = flatten([
+    for s in var.mssql_servers : [
+      for fw in(s.firewall_rules != null ? s.firewall_rules : []) : {
+        server_name = s.name
+        rule        = fw
+      }
+    ]
+  ])
+}
+
+resource "azurerm_mssql_firewall_rule" "firewall_rules" {
+  # Each item in local.combined_firewall_rules becomes a resource
+  for_each = {
+    for fr in local.combined_firewall_rules :
+    "${fr.server_name}-${fr.rule.name}" => fr
+  }
+
+  name             = each.value.rule.name
+  server_id        = azurerm_mssql_server.this[each.value.server_name].id
+  start_ip_address = each.value.rule.start_ip_address
+  end_ip_address   = each.value.rule.end_ip_address
+}
 ```
 ## Requirements
 
@@ -70,13 +95,14 @@ No modules.
 
 | Name | Type |
 |------|------|
+| [azurerm_mssql_firewall_rule.firewall_rules](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/mssql_firewall_rule) | resource |
 | [azurerm_mssql_server.this](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/mssql_server) | resource |
 
 ## Inputs
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
-| <a name="input_mssql_servers"></a> [mssql\_servers](#input\_mssql\_servers) | List to deploy mssql servers | <pre>list(object({<br/>    rg_name                                      = string<br/>    location                                     = optional(string, "uksouth")<br/>    tags                                         = map(string)<br/>    name                                         = string<br/>    version                                      = optional(string, "12.0")<br/>    administrator_login                          = optional(string)<br/>    administrator_login_password                 = optional(string)<br/>    identity_type                                = optional(string)<br/>    identity_ids                                 = optional(list(string))<br/>    connection_policy                            = optional(string, "Default")<br/>    transparent_data_encryption_key_vault_key_id = optional(string)<br/>    minimum_tls_version                          = optional(string, "1.2")<br/>    public_network_access_enabled                = optional(bool, false)<br/>    outbound_network_restriction_enabled         = optional(bool, false)<br/>    primary_user_assigned_identity_id            = optional(string)<br/><br/>    azuread_administrator = optional(object({<br/>      login_username              = string<br/>      object_id                   = string<br/>      tenant_id                   = optional(string)<br/>      azuread_authentication_only = optional(bool)<br/>    }))<br/>  }))</pre> | n/a | yes |
+| <a name="input_mssql_servers"></a> [mssql\_servers](#input\_mssql\_servers) | List to deploy mssql servers | <pre>list(object({<br/>    rg_name                                      = string<br/>    location                                     = optional(string, "uksouth")<br/>    tags                                         = map(string)<br/>    name                                         = string<br/>    version                                      = optional(string, "12.0")<br/>    administrator_login                          = optional(string)<br/>    administrator_login_password                 = optional(string)<br/>    identity_type                                = optional(string)<br/>    identity_ids                                 = optional(list(string))<br/>    connection_policy                            = optional(string, "Default")<br/>    transparent_data_encryption_key_vault_key_id = optional(string)<br/>    minimum_tls_version                          = optional(string, "1.2")<br/>    public_network_access_enabled                = optional(bool, false)<br/>    outbound_network_restriction_enabled         = optional(bool, false)<br/>    primary_user_assigned_identity_id            = optional(string)<br/><br/>    azuread_administrator = optional(object({<br/>      login_username              = string<br/>      object_id                   = string<br/>      tenant_id                   = optional(string)<br/>      azuread_authentication_only = optional(bool)<br/>    }))<br/><br/>    firewall_rules = optional(list(object({<br/>      name             = string<br/>      start_ip_address = string<br/>      end_ip_address   = string<br/>    })))<br/>  }))</pre> | n/a | yes |
 
 ## Outputs
 
