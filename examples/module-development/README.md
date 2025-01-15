@@ -1,6 +1,10 @@
 ```hcl
 data "azurerm_client_config" "current" {}
 
+data "http" "client_ip" {
+  url = "http://checkip.amazonaws.com/"
+}
+
 module "rg" {
   source = "registry.terraform.io/libre-devops/rg/azurerm"
 
@@ -22,8 +26,9 @@ module "mssql_servers" {
       location = module.rg.rg_location
       tags     = module.rg.rg_tags
 
-      name          = "mssql-server-${var.short}-${var.loc}-${var.env}-01"
-      identity_type = "SystemAssigned"
+      name                          = "mssql-server-${var.short}-${var.loc}-${var.env}-01"
+      identity_type                 = "SystemAssigned"
+      public_network_access_enabled = true
 
       azuread_administrator = {
         login_username              = "LibreDevOpsAdmin"
@@ -32,6 +37,18 @@ module "mssql_servers" {
         azuread_authentication_only = true
       }
 
+      firewall_rules = [
+        {
+          name             = "AllowAzureAccess"
+          start_ip_address = "0.0.0.0"
+          end_ip_address   = "0.0.0.0"
+        },
+        {
+          name             = "AllowLocalAccess"
+          start_ip_address = chomp(data.http.client_ip.response_body)
+          end_ip_address   = chomp(data.http.client_ip.response_body)
+        }
+      ]
     }
   ]
 }
@@ -45,6 +62,7 @@ No requirements.
 | Name | Version |
 |------|---------|
 | <a name="provider_azurerm"></a> [azurerm](#provider\_azurerm) | 4.15.0 |
+| <a name="provider_http"></a> [http](#provider\_http) | 3.4.5 |
 | <a name="provider_random"></a> [random](#provider\_random) | 3.6.3 |
 
 ## Modules
@@ -65,6 +83,7 @@ No requirements.
 | [azurerm_resource_group.mgmt_rg](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/data-sources/resource_group) | data source |
 | [azurerm_ssh_public_key.mgmt_ssh_key](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/data-sources/ssh_public_key) | data source |
 | [azurerm_user_assigned_identity.mgmt_user_assigned_id](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/data-sources/user_assigned_identity) | data source |
+| [http_http.client_ip](https://registry.terraform.io/providers/hashicorp/http/latest/docs/data-sources/http) | data source |
 
 ## Inputs
 
