@@ -30,20 +30,20 @@ variable "mssql_servers" {
       end_ip_address   = string
     })))
     vnet_rules = optional(list(object({
-      name      = string
-      subnet_id = string
+      name                                 = string
+      subnet_id                            = string
       ignore_missing_vnet_service_endpoint = optional(bool, false)
     })))
     extended_auditing_policy = optional(object({
-      enabled = optional(bool, false)
-      storage_endpoint            = optional(string)
-      retention_in_days           = optional(number)
-      storage_account_access_key  = optional(string)
+      enabled                                 = optional(bool, false)
+      storage_endpoint                        = optional(string)
+      retention_in_days                       = optional(number)
+      storage_account_access_key              = optional(string)
       storage_account_access_key_is_secondary = optional(bool)
-      log_monitoring_enabled       = optional(bool)
-      storage_account_subscription_id = optional(string)
-      predicate_expression         = optional(string)
-      audit_actions_and_groups          = optional(list(string), ["BATCH_COMPLETED_GROUP"])
+      log_monitoring_enabled                  = optional(bool)
+      storage_account_subscription_id         = optional(string)
+      predicate_expression                    = optional(string)
+      audit_actions_and_groups                = optional(list(string), ["BATCH_COMPLETED_GROUP"])
 
     }))
   }))

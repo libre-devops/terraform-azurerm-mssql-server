@@ -63,7 +63,7 @@ locals {
 
   combined_vnet_rules = flatten([
     for s in var.mssql_servers : [
-      for vnr in (s.vnet_rules != null ? s.vnet_rules : []) : {
+      for vnr in(s.vnet_rules != null ? s.vnet_rules : []) : {
         server_name = s.name
         vnet_rule   = vnr
       }
@@ -109,12 +109,12 @@ resource "azurerm_mssql_server_extended_auditing_policy" "extended_auditing_poli
   storage_endpoint = try(each.value.storage_endpoint, null)
 
   # Optional fields with try() to handle null
-  retention_in_days                     = try(each.value.retention_in_days, 0)
-  storage_account_access_key            = try(each.value.storage_account_access_key, null)
+  retention_in_days                       = try(each.value.retention_in_days, 0)
+  storage_account_access_key              = try(each.value.storage_account_access_key, null)
   storage_account_access_key_is_secondary = try(each.value.storage_account_access_key_is_secondary, false)
-  log_monitoring_enabled                = try(each.value.log_monitoring_enabled, false)
-  predicate_expression                  = try(each.value.predicate_expression, null)
-  storage_account_subscription_id       = try(each.value.storage_account_subscription_id, null)
+  log_monitoring_enabled                  = try(each.value.log_monitoring_enabled, false)
+  predicate_expression                    = try(each.value.predicate_expression, null)
+  storage_account_subscription_id         = try(each.value.storage_account_subscription_id, null)
 
   # Provide a sensible default if not set
   audit_actions_and_groups = try(each.value.audit_actions_and_groups, ["BATCH_COMPLETED_GROUP"])

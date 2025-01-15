@@ -53,12 +53,20 @@ resource "azurerm_mssql_server" "this" {
 }
 
 locals {
-  # Produce a list of { server_name, rule } objects
   combined_firewall_rules = flatten([
     for s in var.mssql_servers : [
       for fw in(s.firewall_rules != null ? s.firewall_rules : []) : {
         server_name = s.name
         rule        = fw
+      }
+    ]
+  ])
+
+  combined_vnet_rules = flatten([
+    for s in var.mssql_servers : [
+      for vnr in(s.vnet_rules != null ? s.vnet_rules : []) : {
+        server_name = s.name
+        vnet_rule   = vnr
       }
     ]
   ])
@@ -75,6 +83,42 @@ resource "azurerm_mssql_firewall_rule" "firewall_rules" {
   server_id        = azurerm_mssql_server.this[each.value.server_name].id
   start_ip_address = each.value.rule.start_ip_address
   end_ip_address   = each.value.rule.end_ip_address
+}
+
+resource "azurerm_mssql_virtual_network_rule" "vnet_rules" {
+  for_each = {
+    for vr in local.combined_vnet_rules :
+    "${vr.server_name}-${vr.vnet_rule.name}" => vr
+  }
+
+  name      = each.value.vnet_rule.name
+  server_id = azurerm_mssql_server.this[each.value.server_name].id
+  subnet_id = each.value.vnet_rule.subnet_id
+}
+
+resource "azurerm_mssql_server_extended_auditing_policy" "extended_auditing_policies" {
+  # Only create if the extended_auditing_policy block exists AND 'enabled = true'
+  for_each = {
+    for server in var.mssql_servers :
+    server.name => server.extended_auditing_policy
+    if server.extended_auditing_policy != null
+  }
+
+  server_id = azurerm_mssql_server.this[each.key].id
+
+  # The resource requires storage_endpoint
+  storage_endpoint = try(each.value.storage_endpoint, null)
+
+  # Optional fields with try() to handle null
+  retention_in_days                       = try(each.value.retention_in_days, 0)
+  storage_account_access_key              = try(each.value.storage_account_access_key, null)
+  storage_account_access_key_is_secondary = try(each.value.storage_account_access_key_is_secondary, false)
+  log_monitoring_enabled                  = try(each.value.log_monitoring_enabled, false)
+  predicate_expression                    = try(each.value.predicate_expression, null)
+  storage_account_subscription_id         = try(each.value.storage_account_subscription_id, null)
+
+  # Provide a sensible default if not set
+  audit_actions_and_groups = try(each.value.audit_actions_and_groups, ["BATCH_COMPLETED_GROUP"])
 }
 ```
 ## Requirements
@@ -97,19 +141,23 @@ No modules.
 |------|------|
 | [azurerm_mssql_firewall_rule.firewall_rules](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/mssql_firewall_rule) | resource |
 | [azurerm_mssql_server.this](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/mssql_server) | resource |
+| [azurerm_mssql_server_extended_auditing_policy.extended_auditing_policies](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/mssql_server_extended_auditing_policy) | resource |
+| [azurerm_mssql_virtual_network_rule.vnet_rules](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/mssql_virtual_network_rule) | resource |
 
 ## Inputs
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
-| <a name="input_mssql_servers"></a> [mssql\_servers](#input\_mssql\_servers) | List to deploy mssql servers | <pre>list(object({<br/>    rg_name                                      = string<br/>    location                                     = optional(string, "uksouth")<br/>    tags                                         = map(string)<br/>    name                                         = string<br/>    version                                      = optional(string, "12.0")<br/>    administrator_login                          = optional(string)<br/>    administrator_login_password                 = optional(string)<br/>    identity_type                                = optional(string)<br/>    identity_ids                                 = optional(list(string))<br/>    connection_policy                            = optional(string, "Default")<br/>    transparent_data_encryption_key_vault_key_id = optional(string)<br/>    minimum_tls_version                          = optional(string, "1.2")<br/>    public_network_access_enabled                = optional(bool, false)<br/>    outbound_network_restriction_enabled         = optional(bool, false)<br/>    primary_user_assigned_identity_id            = optional(string)<br/><br/>    azuread_administrator = optional(object({<br/>      login_username              = string<br/>      object_id                   = string<br/>      tenant_id                   = optional(string)<br/>      azuread_authentication_only = optional(bool)<br/>    }))<br/><br/>    firewall_rules = optional(list(object({<br/>      name             = string<br/>      start_ip_address = string<br/>      end_ip_address   = string<br/>    })))<br/>  }))</pre> | n/a | yes |
+| <a name="input_mssql_servers"></a> [mssql\_servers](#input\_mssql\_servers) | List to deploy mssql servers | <pre>list(object({<br/>    rg_name                                      = string<br/>    location                                     = optional(string, "uksouth")<br/>    tags                                         = map(string)<br/>    name                                         = string<br/>    version                                      = optional(string, "12.0")<br/>    administrator_login                          = optional(string)<br/>    administrator_login_password                 = optional(string)<br/>    identity_type                                = optional(string)<br/>    identity_ids                                 = optional(list(string))<br/>    connection_policy                            = optional(string, "Default")<br/>    transparent_data_encryption_key_vault_key_id = optional(string)<br/>    minimum_tls_version                          = optional(string, "1.2")<br/>    public_network_access_enabled                = optional(bool, false)<br/>    outbound_network_restriction_enabled         = optional(bool, false)<br/>    primary_user_assigned_identity_id            = optional(string)<br/><br/>    azuread_administrator = optional(object({<br/>      login_username              = string<br/>      object_id                   = string<br/>      tenant_id                   = optional(string)<br/>      azuread_authentication_only = optional(bool)<br/>    }))<br/><br/>    firewall_rules = optional(list(object({<br/>      name             = string<br/>      start_ip_address = string<br/>      end_ip_address   = string<br/>    })))<br/>    vnet_rules = optional(list(object({<br/>      name                                 = string<br/>      subnet_id                            = string<br/>      ignore_missing_vnet_service_endpoint = optional(bool, false)<br/>    })))<br/>    extended_auditing_policy = optional(object({<br/>      enabled                                 = optional(bool, false)<br/>      storage_endpoint                        = optional(string)<br/>      retention_in_days                       = optional(number)<br/>      storage_account_access_key              = optional(string)<br/>      storage_account_access_key_is_secondary = optional(bool)<br/>      log_monitoring_enabled                  = optional(bool)<br/>      storage_account_subscription_id         = optional(string)<br/>      predicate_expression                    = optional(string)<br/>      audit_actions_and_groups                = optional(list(string), ["BATCH_COMPLETED_GROUP"])<br/><br/>    }))<br/>  }))</pre> | n/a | yes |
 
 ## Outputs
 
 | Name | Description |
 |------|-------------|
+| <a name="output_mssql_firewall_rule_ids"></a> [mssql\_firewall\_rule\_ids](#output\_mssql\_firewall\_rule\_ids) | A map of MSSQL Firewall Rule IDs, keyed by <server>-<rule>. |
 | <a name="output_mssql_restorable_dropped_database_ids"></a> [mssql\_restorable\_dropped\_database\_ids](#output\_mssql\_restorable\_dropped\_database\_ids) | The ID of the restorable dropped database. |
 | <a name="output_mssql_server_fully_qualified_domain_name"></a> [mssql\_server\_fully\_qualified\_domain\_name](#output\_mssql\_server\_fully\_qualified\_domain\_name) | The fully qualified domain name of the mssql server. |
 | <a name="output_mssql_server_id"></a> [mssql\_server\_id](#output\_mssql\_server\_id) | The ID of the mssql server. |
 | <a name="output_mssql_server_identity"></a> [mssql\_server\_identity](#output\_mssql\_server\_identity) | The identity of the mssql server. |
 | <a name="output_mssql_server_name"></a> [mssql\_server\_name](#output\_mssql\_server\_name) | The name of the mssql server. |
+| <a name="output_mssql_vnet_rule_ids"></a> [mssql\_vnet\_rule\_ids](#output\_mssql\_vnet\_rule\_ids) | A map of MSSQL VNet Rule IDs, keyed by <server>-<rule>. |
