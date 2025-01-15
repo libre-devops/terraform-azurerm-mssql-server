@@ -68,12 +68,17 @@ module "sa" {
 
       identity_type = "SystemAssigned"
 
-      shared_access_keys_enabled                      = false
+      shared_access_keys_enabled                      = true
       create_diagnostic_settings                      = false
       diagnostic_settings_enable_all_logs_and_metrics = false
       diagnostic_settings                             = {}
     },
   ]
+}
+
+resource "azurerm_storage_container" "security_alerts" {
+  name               = "alerts"
+  storage_account_id = module.sa.storage_account_ids["sa${var.short}${var.loc}${var.env}01"]
 }
 
 resource "azurerm_storage_account_network_rules" "rules" {
@@ -174,6 +179,7 @@ No requirements.
 | Name | Type |
 |------|------|
 | [azurerm_storage_account_network_rules.rules](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/storage_account_network_rules) | resource |
+| [azurerm_storage_container.security_alerts](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/storage_container) | resource |
 | [random_string.entropy](https://registry.terraform.io/providers/hashicorp/random/latest/docs/resources/string) | resource |
 | [azurerm_client_config.current](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/data-sources/client_config) | data source |
 | [azurerm_client_config.current_creds](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/data-sources/client_config) | data source |

@@ -67,12 +67,17 @@ module "sa" {
 
       identity_type = "SystemAssigned"
 
-      shared_access_keys_enabled                      = false
+      shared_access_keys_enabled                      = true
       create_diagnostic_settings                      = false
       diagnostic_settings_enable_all_logs_and_metrics = false
       diagnostic_settings                             = {}
     },
   ]
+}
+
+resource "azurerm_storage_container" "security_alerts" {
+  name               = "alerts"
+  storage_account_id = module.sa.storage_account_ids["sa${var.short}${var.loc}${var.env}01"]
 }
 
 resource "azurerm_storage_account_network_rules" "rules" {

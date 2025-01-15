@@ -22,25 +22,6 @@ variable "mssql_servers" {
       tenant_id                   = optional(string)
       azuread_authentication_only = optional(bool)
     }))
-    security_alert_policy = optional(object({
-      state                      = optional(string, "Enabled")
-      disabled_alerts            = optional(list(string), [])
-      email_account_admins       = optional(string, "Disabled")
-      email_addresses            = optional(list(string), [])
-      retention_days             = optional(number, 0)
-      storage_account_access_key = optional(string)
-      storage_endpoint           = optional(string)
-    }))
-    vulnerability_assessment = optional(object({
-      storage_container_path     = optional(string)
-      storage_account_access_key = optional(string)
-      storage_container_sas_key  = optional(string)
-      recurring_scans = optional(object({
-        enabled                   = optional(bool, true)
-        email_subscription_admins = optional(bool, false)
-        emails                    = optional(list(string))
-      }))
-    }))
     firewall_rules = optional(list(object({
       name             = string
       start_ip_address = string
