@@ -49,16 +49,56 @@ module "network" {
     for i, name in module.subnet_calculator.subnet_names :
     name => {
       address_prefixes  = toset([module.subnet_calculator.subnet_ranges[i]])
-      service_endpoints = ["Microsoft.Sql"]
+      service_endpoints = ["Microsoft.Sql", "Microsoft.Storage"]
 
       delegation = []
     }
   }
 }
 
+module "sa" {
+  source = "registry.terraform.io/libre-devops/storage-account/azurerm"
+  storage_accounts = [
+    {
+      rg_name  = module.rg.rg_name
+      location = module.rg.rg_location
+      tags     = module.rg.rg_tags
+
+      name = "sa${var.short}${var.loc}${var.env}01"
+
+      identity_type = "SystemAssigned"
+
+      shared_access_keys_enabled                      = false
+      create_diagnostic_settings                      = false
+      diagnostic_settings_enable_all_logs_and_metrics = false
+      diagnostic_settings                             = {}
+    },
+  ]
+}
+
+resource "azurerm_storage_account_network_rules" "rules" {
+  default_action     = "Deny"
+  storage_account_id = module.sa.storage_account_ids["sa${var.short}${var.loc}${var.env}01"]
+  ip_rules           = [chomp(data.http.client_ip.response_body)]
+  virtual_network_subnet_ids = [
+    module.network.subnets_ids["subnet1"],
+  ]
+}
+
+module "role_assignments" {
+  source = "github.com/libre-devops/terraform-azurerm-role-assignment"
+
+  role_assignments = [
+    {
+      principal_ids = [module.mssql_servers.mssql_server_identity["mssql-server-${var.short}-${var.loc}-${var.env}-01"].0.principal_id]
+      role_names    = ["Storage Blob Data Contributor"]
+      scope         = module.sa.storage_account_ids["sa${var.short}${var.loc}${var.env}01"]
+    }
+  ]
+}
+
 module "mssql_servers" {
   source = "../../"
-
 
   mssql_servers = [
     {
@@ -97,6 +137,10 @@ module "mssql_servers" {
           subnet_id = module.network.subnets_ids["subnet1"]
         }
       ]
+
+      extended_auditing_policy = {
+        storage_endpoint = module.sa.primary_blob_endpoints["sa${var.short}${var.loc}${var.env}01"]
+      }
     }
   ]
 }
@@ -120,6 +164,8 @@ No requirements.
 | <a name="module_mssql_servers"></a> [mssql\_servers](#module\_mssql\_servers) | ../../ | n/a |
 | <a name="module_network"></a> [network](#module\_network) | libre-devops/network/azurerm | n/a |
 | <a name="module_rg"></a> [rg](#module\_rg) | registry.terraform.io/libre-devops/rg/azurerm | n/a |
+| <a name="module_role_assignments"></a> [role\_assignments](#module\_role\_assignments) | github.com/libre-devops/terraform-azurerm-role-assignment | n/a |
+| <a name="module_sa"></a> [sa](#module\_sa) | registry.terraform.io/libre-devops/storage-account/azurerm | n/a |
 | <a name="module_shared_vars"></a> [shared\_vars](#module\_shared\_vars) | libre-devops/shared-vars/azurerm | n/a |
 | <a name="module_subnet_calculator"></a> [subnet\_calculator](#module\_subnet\_calculator) | libre-devops/subnet-calculator/null | n/a |
 
@@ -127,6 +173,7 @@ No requirements.
 
 | Name | Type |
 |------|------|
+| [azurerm_storage_account_network_rules.rules](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/storage_account_network_rules) | resource |
 | [random_string.entropy](https://registry.terraform.io/providers/hashicorp/random/latest/docs/resources/string) | resource |
 | [azurerm_client_config.current](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/data-sources/client_config) | data source |
 | [azurerm_client_config.current_creds](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/data-sources/client_config) | data source |
