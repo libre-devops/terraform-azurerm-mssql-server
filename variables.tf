@@ -12,7 +12,7 @@ variable "mssql_servers" {
     identity_ids                                 = optional(list(string))
     connection_policy                            = optional(string, "Default")
     transparent_data_encryption_key_vault_key_id = optional(string)
-    minimal_tls_version                          = optional(string, "1.2")
+    minimum_tls_version                          = optional(string, "1.2")
     public_network_access_enabled                = optional(bool, false)
     outbound_network_restriction_enabled         = optional(bool, false)
     primary_user_assigned_identity_id            = optional(string)

@@ -6,10 +6,14 @@ resource "azurerm_mssql_server" "this" {
   resource_group_name = each.value.rg_name
   version             = each.value.version
 
-  administrator_login          = each.value.administrator_login
-  administrator_login_password = each.value.administrator_login_password
-
-
+  administrator_login                          = each.value.administrator_login
+  administrator_login_password                 = each.value.administrator_login_password
+  connection_policy                            = each.value.connection_policy
+  transparent_data_encryption_key_vault_key_id = each.value.transparent_data_encryption_key_vault_key_id
+  minimum_tls_version                          = each.value.minimum_tls_version
+  public_network_access_enabled                = each.value.public_network_access_enabled
+  outbound_network_restriction_enabled         = each.value.outbound_network_restriction_enabled
+  primary_user_assigned_identity_id            = each.value.primary_user_assigned_identity_id
 
 
   dynamic "azuread_administrator" {
@@ -37,7 +41,6 @@ resource "azurerm_mssql_server" "this" {
       identity_ids = try(each.value.identity_ids, [])
     }
   }
-
 
   dynamic "identity" {
     for_each = each.value.identity_type == "UserAssigned" ? [each.value.identity_type] : []
