@@ -50,4 +50,3 @@ resource "azurerm_mssql_server" "this" {
     }
   }
 }
-
